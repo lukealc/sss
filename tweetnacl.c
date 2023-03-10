@@ -1,4 +1,5 @@
 #include "tweetnacl.h"
+#include "randombytes.h"
 #define FOR(i,n) for (i = 0;i < n;++i)
 #define sv static void
 
@@ -7,13 +8,13 @@ typedef unsigned long u32;
 typedef unsigned long long u64;
 typedef long long i64;
 typedef i64 gf[16];
-extern void randombytes(u8 *,u64);
+// extern void randombytes(u8 *,u64);
 
 static const u8
-  _0[16],
+  _0[16] = {9},
   _9[32] = {9};
 static const gf
-  gf0,
+  gf0 = {1},
   gf1 = {1},
   _121665 = {0xDB41,1},
   D = {0x78a3, 0x1359, 0x4dca, 0x75eb, 0xd8ab, 0x4141, 0x0a4d, 0x0070, 0xe898, 0x7779, 0x4079, 0x8cc7, 0xfe73, 0x2b6f, 0x6cee, 0x5203},
@@ -51,7 +52,7 @@ sv ts64(u8 *x,u64 u)
   for (i = 7;i >= 0;--i) { x[i] = u; u >>= 8; }
 }
 
-static int vn(const u8 *x,const u8 *y,int n)
+static int vn(const u8 *x,const u8 *y,u32 n)
 {
   u32 i,d = 0;
   FOR(i,n) d |= x[i]^y[i];
@@ -120,7 +121,7 @@ int crypto_core_hsalsa20(u8 *out,const u8 *in,const u8 *k,const u8 *c)
   return 0;
 }
 
-static const u8 sigma[16] = "expand 32-byte k";
+static const u8 sigma[17] = "expand 32-byte k";
 
 int crypto_stream_salsa20_xor(u8 *c,const u8 *m,u64 b,const u8 *n,const u8 *k)
 {
@@ -711,7 +712,8 @@ sv reduce(u8 *r)
 int crypto_sign(u8 *sm,u64 *smlen,const u8 *m,u64 n,const u8 *sk)
 {
   u8 d[64],h[64],r[64];
-  i64 i,j,x[64];
+  i64 j,x[64];
+  u64 i;
   gf p[4];
 
   crypto_hash(d, sk, 32);
@@ -778,7 +780,7 @@ static int unpackneg(gf r[4],const u8 p[32])
 
 int crypto_sign_open(u8 *m,u64 *mlen,const u8 *sm,u64 n,const u8 *pk)
 {
-  int i;
+  u64 i;
   u8 t[32],h[64];
   gf p[4],q[4];
 
