@@ -24,6 +24,7 @@
  */
 typedef uint8_t sss_Keyshare[sss_KEYSHARE_LEN];
 
+void clear_history(void);
 
 /*
  * Share the secret given in `key` into `n` shares with a treshold value given
@@ -42,7 +43,8 @@ typedef uint8_t sss_Keyshare[sss_KEYSHARE_LEN];
 void sss_create_keyshares(sss_Keyshare *out,
                           const uint8_t key[32],
                           uint8_t n,
-                          uint8_t k);
+                          uint8_t k,
+                          uint32_t keyId);
 
 
 /*

@@ -22,6 +22,7 @@
 #include "hazmat.h"
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 
 typedef struct {
@@ -29,6 +30,12 @@ typedef struct {
 	uint8_t y;
 } ByteShare;
 
+// Define a maximum number of keyIds and the size of each polynomial
+#define MAX_KEY_IDS 256
+#define POLY_SIZE 8
+
+// Global history array for storing polynomial terms for multiple keyIds
+uint32_t history[MAX_KEY_IDS][POLY_SIZE * (POLY_SIZE - 1)]; // history[keyId][polyIndex * POLY_SIZE + coeffIndex]
 
 static void
 bitslice(uint32_t r[8], const uint8_t x[32])
@@ -265,6 +272,11 @@ gf256_inv(uint32_t r[8], uint32_t x[8])
 	gf256_mul(r, r, y); // r = x^254
 }
 
+void clear_history(void)
+{
+  // Clear the history array
+  memset(history, 0, sizeof(history));
+}
 
 /*
  * Create `k` key shares of the key given in `key`. The caller has to ensure
@@ -275,40 +287,60 @@ gf256_inv(uint32_t r[8], uint32_t x[8])
  sss_create_keyshares(sss_Keyshare *out,
                       const uint8_t key[32],
                       uint8_t n,
-                      uint8_t k)
+                      uint8_t k,
+                      uint32_t keyId)
 {
-	/* Check if the parameters are valid */
-	assert(n != 0);
-	assert(k != 0);
-	assert(k <= n);
+  /* Check if the parameters are valid */
+  assert(n != 0);
+  assert(k != 0);
+  assert(k <= n);
+  assert(keyId < MAX_KEY_IDS); // Ensure keyId is within bounds
 
-	uint8_t share_idx, coeff_idx, unbitsliced_x;
-	uint32_t poly0[8], poly[k-1][8], x[8], y[8], xpow[8], tmp[8];
+  uint8_t share_idx, coeff_idx, unbitsliced_x;
+  uint32_t poly0[POLY_SIZE], poly[POLY_SIZE][POLY_SIZE], x[POLY_SIZE], y[POLY_SIZE], xpow[POLY_SIZE], tmp[POLY_SIZE];
 
-	/* Put the secret in the bottom part of the polynomial */
-	bitslice(poly0, key);
+  /* Put the secret in the bottom part of the polynomial */
+  bitslice(poly0, key);
 
-	/* Generate the other terms of the polynomial */
-	randombytes((void*) poly, sizeof(poly));
+  /* Check if history exists for the given keyId */
+  if (history[keyId][0] != 0) { // Check if the first element is non-zero (indicating history exists)
+      // Reuse the saved terms for poly
+      for (coeff_idx = 0; coeff_idx < (k - 1); coeff_idx++) {
+          for (uint8_t j = 0; j < POLY_SIZE; j++) {
+              poly[coeff_idx][j] = history[keyId][coeff_idx * POLY_SIZE + j];
+          }
+      }
+			printf("History was used for key %d\n", keyId);
+  } else {
+      // Generate the other terms of the polynomial
+      randombytes((void*) poly, sizeof(poly));
+      // Save the generated poly terms in history for future use
+      for (coeff_idx = 0; coeff_idx < (k - 1); coeff_idx++) {
+          for (uint8_t j = 0; j < POLY_SIZE; j++) {
+              history[keyId][coeff_idx * POLY_SIZE + j] = poly[coeff_idx][j];
+          }
+      }
+			printf("New random poly terms for key %d\n", keyId);
+  }
 
-	for (share_idx = 0; share_idx < n; share_idx++) {
-		/* x value is in 1..n */
-		unbitsliced_x = share_idx + 1;
-		out[share_idx][0] = unbitsliced_x;
-		bitslice_setall(x, unbitsliced_x);
+  for (share_idx = 0; share_idx < n; share_idx++) {
+      /* x value is in 1..n */
+      unbitsliced_x = share_idx + 1;
+      out[share_idx][0] = unbitsliced_x;
+      bitslice_setall(x, unbitsliced_x);
 
-		/* Calculate y */
-		memset(y, 0, sizeof(y));
-		memset(xpow, 0, sizeof(xpow));
-		xpow[0] = ~0;
-		gf256_add(y, poly0);
-		for (coeff_idx = 0; coeff_idx < (k-1); coeff_idx++) {
-			gf256_mul(xpow, xpow, x);
-			gf256_mul(tmp, xpow, poly[coeff_idx]);
-			gf256_add(y, tmp);
-		}
-		unbitslice(&out[share_idx][1], y);
-	}
+      /* Calculate y */
+      memset(y, 0, sizeof(y));
+      memset(xpow, 0, sizeof(xpow));
+      xpow[0] = ~0;
+      gf256_add(y, poly0);
+      for (coeff_idx = 0; coeff_idx < (k - 1); coeff_idx++) {
+          gf256_mul(xpow, xpow, x);
+          gf256_mul(tmp, xpow, poly[coeff_idx]);
+          gf256_add(y, tmp);
+      }
+      unbitslice(&out[share_idx][1], y);
+  }
 }
 
 

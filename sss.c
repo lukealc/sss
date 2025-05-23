@@ -29,6 +29,15 @@
 # error "crypto_secretbox_KEYBYTES size is invalid"
 #endif
 
+#define MAX_KEYS 100 // Define a maximum number of keys to store in history
+
+typedef struct {
+    uint32_t keyId;
+    unsigned char key[32];
+} KeyHistory;
+
+KeyHistory keyHistory[MAX_KEYS];
+size_t keyHistoryCount = 0;
 
 /*
  * Nonce for the `crypto_secretbox` authenticated encryption.
@@ -54,7 +63,6 @@ static sss_Keyshare* get_keyshare(sss_Share *share)
 	return (sss_Keyshare*) &share[0];
 }
 
-
 /*
  * Return a const pointer to the ciphertext part of this Share
  */
@@ -62,7 +70,6 @@ static const uint8_t* get_ciphertext_const(const sss_Share *share)
 {
 	return &((const uint8_t*) share)[sss_KEYSHARE_LEN];
 }
-
 
 /*
  * Return a const pointer to the Keyshare part of this Share
@@ -72,39 +79,65 @@ static const sss_Keyshare* get_keyshare_const(const sss_Share *share)
 	return (const sss_Keyshare*) &share[0];
 }
 
+/*
+ * Clear the keyHistory array
+ */
+void clear_key_history(void)
+{
+    // Clear the keyHistory array
+    memset(keyHistory, 0, sizeof(keyHistory));
+    keyHistoryCount = 0; // Reset the count of stored keys
+}
 
 /*
  * Create `n` shares with theshold `k` and write them to `out`
  */
 void sss_create_shares(sss_Share *out, const unsigned char *data,
-                       uint8_t n, uint8_t k)
+                       uint8_t n, uint8_t k, uint32_t keyId)
 {
-	unsigned char key[32];
-	unsigned char m[crypto_secretbox_ZEROBYTES + sss_MLEN] = { 0 };
-	unsigned long long mlen = sizeof(m); /* length includes zero-bytes */
-	unsigned char c[mlen];
-	int tmp;
-	sss_Keyshare keyshares[n];
-	size_t idx;
+    unsigned char key[32];
+    unsigned char m[crypto_secretbox_ZEROBYTES + sss_MLEN] = { 0 };
+    unsigned long long mlen = sizeof(m); /* length includes zero-bytes */
+    unsigned char c[mlen];
+    int tmp;
+    sss_Keyshare keyshares[n];
+    size_t idx;
+    int found = 0;
 
-	/* Generate a random encryption key */
-	randombytes(key, sizeof(key));
+    // Check if the keyId already exists in history
+    for (size_t i = 0; i < keyHistoryCount; i++) {
+        if (keyHistory[i].keyId == keyId) {
+            memcpy(key, keyHistory[i].key, sizeof(key));
+            found = 1;
+            break;
+        }
+    }
 
-	/* AEAD encrypt the data with the key */
-	memcpy(&m[crypto_secretbox_ZEROBYTES], data, sss_MLEN);
-	tmp = crypto_secretbox(c, m, mlen, nonce, key);
-	assert(tmp == 0); /* should always happen */
+    // If not found, generate a new random encryption key and store it
+    if (!found) {
+        randombytes(key, sizeof(key));
+        if (keyHistoryCount < MAX_KEYS) {
+            keyHistory[keyHistoryCount].keyId = keyId;
+            memcpy(keyHistory[keyHistoryCount].key, key, sizeof(key));
+            keyHistoryCount++;
+        }
+    }
 
-	/* Generate KeyShares */
-	sss_create_keyshares(keyshares, key, n, k);
+    // AEAD encrypt the data with the key
+    memcpy(&m[crypto_secretbox_ZEROBYTES], data, sss_MLEN);
+    tmp = crypto_secretbox(c, m, mlen, nonce, key);
+    assert(tmp == 0); /* should always happen */
 
-	/* Build regular shares */
-	for (idx = 0; idx < n; idx++) {
-		memcpy(get_keyshare((sss_Share*) &out[idx]), &keyshares[idx][0],
-		sss_KEYSHARE_LEN);
-		memcpy(get_ciphertext((sss_Share*) &out[idx]),
-		       &c[crypto_secretbox_BOXZEROBYTES], sss_CLEN);
-	}
+    // Generate KeyShares
+    sss_create_keyshares(keyshares, key, n, k, keyId);
+
+    // Build regular shares
+    for (idx = 0; idx < n; idx++) {
+        memcpy(get_keyshare((sss_Share*) &out[idx]), &keyshares[idx][0],
+               sss_KEYSHARE_LEN);
+        memcpy(get_ciphertext((sss_Share*) &out[idx]),
+               &c[crypto_secretbox_BOXZEROBYTES], sss_CLEN);
+    }
 }
 
 

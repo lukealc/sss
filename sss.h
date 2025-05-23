@@ -38,6 +38,7 @@ Length of the message (must be known at compile-time)
  */
 typedef uint8_t sss_Share[sss_SHARE_LEN];
 
+void clear_key_history(void);
 
 /*
  * Create `n` shares of the secret data `data`. Share such that `k` or more
@@ -50,7 +51,8 @@ typedef uint8_t sss_Share[sss_SHARE_LEN];
 void sss_create_shares(sss_Share *out,
                        const uint8_t *data,
                        uint8_t n,
-                       uint8_t k);
+                       uint8_t k,
+                       uint32_t keyId);
 
 
 /*

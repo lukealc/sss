@@ -1,5 +1,6 @@
 #include "tweetnacl.h"
 #include "randombytes.h"
+#include "stdio.h"
 #define FOR(i,n) for (i = 0;i < n;++i)
 #define sv static void
 
@@ -248,8 +249,20 @@ int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
   int i;
   if (d < 32) return -1;
   crypto_stream_xor(c,m,d,n,k);
+  for (int j = 0; j < 96; ++j) {
+      printf("%02x ", c[j]); // Print each byte in hexadecimal format
+  }
+  printf(" - 1\n");
   crypto_onetimeauth(c + 16,c + 32,d - 32,c);
+    for (int j = 0; j < 96; ++j) {
+      printf("%02x ", c[j]); // Print each byte in hexadecimal format
+  }
+  printf(" - 2\n");
   FOR(i,16) c[i] = 0;
+  for (int j = 0; j < 96; ++j) {
+      printf("%02x ", c[j]); // Print each byte in hexadecimal format
+  }
+  printf(" - 3\n");
   return 0;
 }
 
