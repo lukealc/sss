@@ -17,14 +17,14 @@
 
 #define sss_KEYSHARE_LEN 33 /* 1 + 32 */
 
+/* Define the size of each polynomial : total POLY_SIZE * POLY_SIZE */
+#define POLY_SIZE 8
 
 /*
  * One share of a cryptographic key which is shared using Shamir's
  * the `sss_create_keyshares` function.
  */
 typedef uint8_t sss_Keyshare[sss_KEYSHARE_LEN];
-
-void clear_history(void);
 
 /*
  * Share the secret given in `key` into `n` shares with a treshold value given
@@ -40,12 +40,17 @@ void clear_history(void);
  * If you are looking for a function that *just* creates shares of arbitrary
  * data, you should use the `sss_create_shares` function in `sss.h`.
  */
-void sss_create_keyshares(sss_Keyshare *out,
+void sss_create_keyshares_init(sss_Keyshare *out,
                           const uint8_t key[32],
                           uint8_t n,
                           uint8_t k,
-                          uint32_t keyId);
+                          uint8_t offset,
+                          const uint8_t* polyinit); 	/* if not NULL, polyinit must point to k-1*POLY_SIZE bytes */
 
+void sss_create_keyshares(sss_Keyshare *out,
+                          const uint8_t key[32],
+                          uint8_t n,
+                          uint8_t k);
 
 /*
  * Combine the `k` shares provided in `shares` and write the resulting key to
